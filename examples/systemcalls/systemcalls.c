@@ -1,5 +1,17 @@
 #include "systemcalls.h"
+#include <unistd.h>
+#include <stdlib.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <errno.h>
 
+/**List of helpful prior submission references:
+  *ajsanthosh14 helped
+  *mamo6538
+  *MehulCUB
+  *psk73
+  *
+*/
 /**
  * @param cmd the command to execute with system()
  * @return true if the command in @param cmd was executed
@@ -17,9 +29,13 @@ bool do_system(const char *cmd)
  *   or false() if it returned a failure
 */
 
-    return true;
+	int ret_value = system(cmd);
+	//check to see if system was able to be completed
+	if (ret_value != 0)
+		return false;
+	else
+		return true;
 }
-
 /**
 * @param count -The numbers of variables passed to the function. The variables are command to execute.
 *   followed by arguments to pass to the command
@@ -57,8 +73,51 @@ bool do_exec(int count, ...)
  *   (first argument to execv), and use the remaining arguments
  *   as second argument to the execv() command.
  *
-*/
+*/	//printf("Count: %d \n", count);
+	int status;
+	pid_t pid;
 
+	pid = fork();//create fork
+	
+	if (pid == -1)//fork not able to be created
+	{
+		//printf("77 PID: -1\n");
+		return false;
+	}
+	else if (pid == 0)//Child process
+	{
+		//printf("83 PID: %d\n", pid);
+		//printf("execv performed\n");
+		int ret_value = execv(command[0], command);
+		//printf("ret_value: %d \n", ret_value);
+		
+		if (ret_value == -1) //check if execv could execute
+		{
+			exit(-1);
+		}	
+	}
+	
+	else//Parent process
+	{
+		printf("WAITPID: %d\n", (waitpid (-1, &status, 0)));
+		if(waitpid (-1, &status, 0) == -1)
+		{
+			if(WIFEXITED(status))
+			{
+				if(WEXITSTATUS(status))
+				{
+					return false;
+				}
+				else
+					return true;
+			}
+			else 
+				return false;
+		}
+	}
+		
+		
+	
     va_end(args);
 
     return true;
@@ -92,7 +151,44 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
-
+	int status;
+	pid_t pid;
+	int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);
+	if (fd < 0) {perror("open");return false;}
+	
+	switch (pid = fork())
+	{
+	case -1: perror("fork"); return false;
+	case 0:
+		if (dup2(fd,1) < 0) { perror("dup2"); return false;}
+		close(fd);
+		execv(command[0], command); perror("execvp"); return false;
+		
+		//check
+		//int ret_value = execv(command[0], command);
+		//if (ret_value == -1)
+		//{
+			//return false;printf("186\n");
+		//}
+		//return false;	
+	default:
+		close(fd);
+		if(waitpid (-1, &status, 0) == -1)//wait for any child process to end
+		{
+			if(WIFEXITED(status))//check if child terminated normally
+			{
+				if(WEXITSTATUS(status))//check exit status of child, only to be employed if WIFEXITED returned true
+				{
+					return false;
+				}
+				else
+					return true;
+			}
+			else 
+				return false;
+		}
+	}
+    
     va_end(args);
 
     return true;
